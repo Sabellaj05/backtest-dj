@@ -13,6 +13,7 @@ export default defineConfig({
     exclude: ['lucide-react'],
   },
   server: {
-    port: 3000, // Changed port to 3000
+    host: '0.0.0.0', // Listen on all network interfaces
+    port: 3000,
   },
 });

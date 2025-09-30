@@ -19,6 +19,20 @@ import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { BacktestChart } from './components/BacktestChart';
 import './App.css';
 
+// Auto-detect API base URL based on current hostname
+const getApiBaseUrl = () => {
+  const hostname = window.location.hostname;
+  const protocol = window.location.protocol;
+  
+  // If accessing via network IP, use that IP for backend
+  if (hostname.match(/^192\.168\.\d+\.\d+$/)) {
+    return `${protocol}//${hostname}:8000`;
+  }
+  
+  // Otherwise use localhost (or env variable if set)
+  return import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+};
+
 // Define strategy options
 const strategyOptions = [
   { value: 'SMA', label: 'Simple Moving Average' },
@@ -58,7 +72,9 @@ function App() {
     console.log('Starting backtest with parameters:', backtestParams);
 
     try {
-      const apiUrl = `${import.meta.env.VITE_API_BASE_URL}/api/backtest/`;
+      const apiBaseUrl = getApiBaseUrl();
+      const apiUrl = `${apiBaseUrl}/api/backtest/`;
+      console.log('Using API URL:', apiUrl);
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
