@@ -1,0 +1,11 @@
+django==5.0.4
+pandas==1.5.3
+numpy==1.23.5
+plotly==5.22.0
+appdirs==1.4.4
+yfinance==0.2.66
+backtesting==0.3.3
+bokeh==2.4.3
+djangorestframework
+django-cors-headers
+#MetaTrader5

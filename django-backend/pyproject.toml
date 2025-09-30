@@ -1,0 +1,18 @@
+[project]
+name = "backtester"
+version = "0.2.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "appdirs==1.4.4",
+    "backtesting==0.3.3",
+    "bokeh==2.4.3",
+    "django==5.0.4",
+    "django-cors-headers>=4.9.0",
+    "djangorestframework>=3.16.1",
+    "numpy==1.23.5",
+    "pandas==1.5.3",
+    "plotly==5.22.0",
+    "yfinance==0.2.66",
+]

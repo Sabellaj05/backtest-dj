@@ -1,0 +1,55 @@
+request:
+{"ticker": "META", "startDate": "2023-01-01", "endDate": "2023-02-02", "strategy": "buy_and_hold", "capital": 10000.0}
+
+response:
+{
+    "metrics": {
+        "total_return_pct": 17.19,
+        "cagr_pct": 571.29,
+        "sharpe": 2.76,
+        "max_drawdown_pct": -3.06,
+        "trades": 1,
+        "winrate_pct": 100.0
+    },
+    "chart_data": {
+        "dates": [
+            "2023-01-03",
+            ...
+            "2023-02-01"
+        ],
+        "close": [
+            123.9757308959961,
+            ...
+            152.1818389892578
+        ]
+    }
+}
+
+
+request:
+{"ticker": "META", "startDate": "2023-01-01", "endDate": "2023-02-02", "strategy": "sma_cross", "capital": 10000.0}
+
+
+responde:
+{
+    "metrics": {
+        "total_return_pct": 0.0,
+        "cagr_pct": 0.0,
+        "sharpe": 0.0,
+        "max_drawdown_pct": -0.0,
+        "trades": 0,
+        "winrate_pct": 0.0
+    },
+    "chart_data": {
+        "dates": [
+            "2023-01-03",
+            ...
+            "2023-03-02"
+        ],
+        "close": [
+            123.97572326660156,
+            ...
+            173.4606475830078
+        ]
+    }
+}

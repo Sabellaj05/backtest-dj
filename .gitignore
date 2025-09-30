@@ -1,0 +1,103 @@
+# ============================================
+# DJANGO BACKEND
+# ============================================
+
+# Python virtual environments
+django-backend/venv/
+django-backend/.venv/
+django-backend/env/
+
+# Python compiled files
+*.pyc
+**/__pycache__/
+
+# Django database
+django-backend/db.sqlite3
+django-backend/*.sqlite3
+
+# Django static files (if collected)
+django-backend/staticfiles/
+django-backend/static_root/
+
+# Django media files (optional - uncomment if you don't want to track uploads)
+# django-backend/media/
+
+# ============================================
+# REACT/VITE FRONTEND
+# ============================================
+
+# Dependencies
+django-front/node_modules/
+
+# Build outputs
+django-front/dist/
+django-front/dist-ssr/
+django-front/build/
+
+# Logs
+django-front/logs
+django-front/*.log
+django-front/npm-debug.log*
+django-front/yarn-debug.log*
+django-front/yarn-error.log*
+django-front/pnpm-debug.log*
+django-front/lerna-debug.log*
+
+# ============================================
+# ENVIRONMENT & SECRETS
+# ============================================
+
+# Environment files (NEVER commit these!)
+.env
+.env.local
+.env*.local
+**/.env
+**/.env.local
+
+# ============================================
+# EDITOR & IDE
+# ============================================
+
+# VSCode
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# JetBrains IDEs
+.idea/
+*.iml
+
+# Claude
+.claude/
+
+# ============================================
+# OS FILES
+# ============================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# ============================================
+# PROJECT SPECIFIC
+# ============================================
+
+# Your debug/planning files (uncomment if you want to track these)
+DBG.md
+PLAN.md
+context.md
+
+# Screenshots (optional - uncomment if you don't want to track)
+# *.png
+# *.jpg
+# *.jpeg
