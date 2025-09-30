@@ -21,15 +21,20 @@ cd django-backend
 # Create and activate virtual environment
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+# with uv
+uv sync
+source .venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
 
 # Run migrations
 python manage.py migrate
+uv run manage.py migrate
 
 # Start development server
 python manage.py runserver
+uv run manage.py runserver
 ```
 
 Backend runs at: `http://localhost:8000`
@@ -44,6 +49,8 @@ npm install
 
 # Start development server
 npm run dev
+# for local access
+# npm run dev -- --host 0.0.0.0
 ```
 
 Frontend runs at: `http://localhost:5173` (or another port if 5173 is busy)
@@ -53,21 +60,6 @@ Frontend runs at: `http://localhost:5173` (or another port if 5173 is busy)
 1. Start both servers in separate terminals
 2. Frontend proxies API requests to backend
 3. Make changes and see them hot-reload
-
-## Git Workflow
-
-This is a monorepo - both frontend and backend are tracked in a single repository.
-
-```bash
-# Add all changes
-git add .
-
-# Commit changes
-git commit -m "Your commit message"
-
-# Push to remote (once configured)
-git push origin main
-```
 
 ## Tech Stack
 
