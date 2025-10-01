@@ -115,7 +115,7 @@ function App() {
       </header>
 
       <Card className="w-full max-w-3xl p-8 shadow-2xl border-border animate-fade-in">
-        <CardHeader>
+        <CardHeader className="text-center">
           <CardTitle className="text-3xl text-primary">Backtesting Parameters</CardTitle>
           <p className="text-textSecondary">
             Input your desired parameters to run a backtest.
@@ -231,7 +231,7 @@ function App() {
 
       {chartsData && (
         <Card className="w-full max-w-3xl mt-12 p-8 shadow-2xl border-border animate-fade-in-up">
-          <CardHeader>
+          <CardHeader className="text-center">
             <CardTitle className="text-3xl text-secondary">Backtest Results</CardTitle>
             <p className="text-textSecondary">
               Performance charts and key metrics.
