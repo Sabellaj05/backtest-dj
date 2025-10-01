@@ -17,6 +17,8 @@ import { Calendar } from './components/ui/calendar';
 import { Separator } from './components/ui/separator';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { BacktestChart } from './components/BacktestChart';
+import { Navbar } from './components/layout/Navbar';
+import { Footer } from './components/layout/Footer';
 import './App.css';
 
 // Auto-detect API base URL based on current hostname
@@ -100,7 +102,9 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col items-center p-8">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
+      <Navbar />
+      <div className="flex-1 flex flex-col items-center p-8">
       <header className="w-full max-w-4xl text-center mb-12">
         <h1 className="text-5xl font-extrabold tracking-tight text-primary animate-fade-in-down">
           QuantFlow Backtester
@@ -266,8 +270,8 @@ function App() {
           </CardContent>
         </Card>
       )}
-
-
+      </div>
+      <Footer />
     </div>
   );
 }
