@@ -105,7 +105,7 @@ def simple_backtest(df, n1, n2, initial_cash=10000.0, commission=0.0):
     equity_df = pd.DataFrame(equity_list).set_index('date')
     return equity_df, trades, df
 
-def compute_metrics(equity_df, trades, initial_cash) -> Dict[str, Any]:
+def compute_metrics(equity_df: pd.DataFrame, trades, initial_cash) -> Dict[str, Any]:
     equity = equity_df['equity']
     total_return = (equity.iloc[-1] / equity.iloc[0] - 1) * 100
     days = (equity_df.index[-1] - equity_df.index[0]).days or 1
@@ -113,6 +113,7 @@ def compute_metrics(equity_df, trades, initial_cash) -> Dict[str, Any]:
     cagr = (equity.iloc[-1] / equity.iloc[0]) ** (1 / years) - 1 if years > 0 else 0
 
     daily_returns = equity.pct_change().dropna()
+    # sharpe ratio
     sharpe = np.nan_to_num((daily_returns.mean() / daily_returns.std()) * (252 ** 0.5) if len(daily_returns) > 1 and daily_returns.std() > 0 else 0)
 
     running_max = equity.cummax()
