@@ -4,5 +4,5 @@ from . import views
 app_name = 'core'
 
 urlpatterns = [
-    path('api/backtest/', views.BacktestAPIView.as_view(), name='api_backtest'),
+    path('api/v1/backtest/', views.BacktestAPIView.as_view(), name='api_backtest'),
 ]

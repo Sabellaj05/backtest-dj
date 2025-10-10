@@ -7,6 +7,8 @@ import pandas as pd
 import numpy as np
 import datetime
 from typing import Dict, Any, Optional
+import warnings
+warnings.simplefilter(action="ignore", category=FutureWarning)
 
 # Optional libraries
 try:
@@ -163,8 +165,6 @@ def run_backtest_from_params(validated_data) -> Dict[str, Any]:
     end = validated_data['endDate']
     strategy_name = validated_data['strategy']
     initial_cash = validated_data['capital']
-    # This parameter is from the old form, we can decide on a default for the API
-    use_bt_lib = True 
 
     if start >= end:
         return {'error': 'Start date must be before end date.'}
@@ -183,7 +183,8 @@ def run_backtest_from_params(validated_data) -> Dict[str, Any]:
     except Exception as e:
         error_msgs.append(f'Method 1 failed: {e}')
         df = None
-    
+
+    # if method 1 failed -> df = None and try the other method
     if df is None or df.empty:
         try:
             ticker_obj = yf.Ticker(ticker)
@@ -193,7 +194,7 @@ def run_backtest_from_params(validated_data) -> Dict[str, Any]:
         except Exception as e:
             error_msgs.append(f'Method 2 failed: {e}')
             df = None
-            
+    # if method 2 failed -> df = None and try the other method
     if df is None or df.empty:
         try:
             df = yf.download(ticker, start=str(start), end=str(end), 
@@ -203,7 +204,7 @@ def run_backtest_from_params(validated_data) -> Dict[str, Any]:
         except Exception as e:
             error_msgs.append(f'Method 3 failed: {e}')
             df = None
-
+    # if we're here both previous methods have failed and we use the sample data
     if df is None or df.empty:
         try:
             df = generate_sample_data(ticker, start, end)
@@ -232,6 +233,7 @@ def run_backtest_from_params(validated_data) -> Dict[str, Any]:
         'buy_and_hold': 'buy_and_hold', # Allow direct name
         'sma_cross': 'sma_cross' # Allow direct name
     }
+
     backend_strategy_name = strategy_map.get(strategy_name, strategy_name)
 
     # --- Timeframe Validation ---
@@ -294,7 +296,7 @@ class BacktestAPIView(APIView):
         serializer = BacktestSerializer(data=request.data)
         if serializer.is_valid():
             # Call the refactored logic function
-            results = run_backtest_from_params(serializer.validated_data)
+            results: Dict[str, Any] = run_backtest_from_params(serializer.validated_data)
             
             # Check if the logic function returned an error
             if 'error' in results:
