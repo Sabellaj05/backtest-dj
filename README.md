@@ -2,6 +2,8 @@
 
 A full-stack application with Django backend and React frontend.
 
+![Image](assets/main-ui.png)
+
 ## Project Structure
 
 ```
@@ -10,6 +12,7 @@ django-project/
 ├── django-front/       # React + Vite frontend
 └── assets/            # Shared assets
 ```
+![Image](assets/backtest-results.png)
 
 ## Getting Started
 
