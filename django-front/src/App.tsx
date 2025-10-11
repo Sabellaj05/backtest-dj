@@ -41,6 +41,7 @@ const strategyOptions = [
   { value: 'EMA', label: 'Exponential Moving Average' },
   { value: 'RSI', label: 'Relative Strength Index' },
   { value: 'MACD', label: 'Moving Average Convergence Divergence' },
+  { value: 'LA_BOMBA', label: 'LA BOMBA' },
 ];
 
 function App() {
@@ -48,6 +49,7 @@ function App() {
   const [startDate, setStartDate] = useState<Date | undefined>(new Date());
   const [endDate, setEndDate] = useState<Date | undefined>(new Date());
   const [strategy, setStrategy] = useState<string>('');
+  const [interval, setInterval] = useState<string>('1d'); // Default interval
   const [capital, setCapital] = useState<string>('10000'); // Default capital
   const [chartsData, setChartsData] = useState<any>(null); // Placeholder for chart data
 
@@ -68,6 +70,7 @@ function App() {
       startDate: format(startDate, 'yyyy-MM-dd'),
       endDate: format(endDate, 'yyyy-MM-dd'),
       strategy,
+      interval, // Add interval to the request
       capital: parseFloat(capital),
     };
 
@@ -75,7 +78,7 @@ function App() {
 
     try {
       const apiBaseUrl = getApiBaseUrl();
-      const apiUrl = `${apiBaseUrl}/api/backtest/`;
+            const apiUrl = `${apiBaseUrl}/api/v1/backtest/`;
       console.log('Using API URL:', apiUrl);
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -215,6 +218,22 @@ function App() {
                       {option.label}
                     </SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Interval Selection */}
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="interval" className="text-muted-foreground">Interval</Label>
+              <Select onValueChange={setInterval} value={interval}>
+                <SelectTrigger className="w-full bg-muted border-border text-foreground focus:border-primary focus:ring-primary">
+                  <SelectValue placeholder="Select an interval" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover border-border text-foreground">
+                  <SelectItem value="1d">Daily</SelectItem>
+                  <SelectItem value="1h">Hourly</SelectItem>
+                  <SelectItem value="1wk">Weekly</SelectItem>
+                  <SelectItem value="1mo">Monthly</SelectItem>
                 </SelectContent>
               </Select>
             </div>

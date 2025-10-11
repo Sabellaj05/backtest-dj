@@ -156,6 +156,11 @@ from .strategies.factory import create_strategy
 
 from bokeh.embed import components
 
+
+def sanitize_series(series_or_list):
+    """Replaces NaN/inf with None and converts valid numbers to standard floats."""
+    return [None if x is None or np.isnan(x) or np.isinf(x) else float(x) for x in series_or_list]
+
 def run_backtest_from_params(validated_data) -> Dict[str, Any]:
     """
     Runs the backtest with the given parameters and returns the results.
@@ -165,6 +170,7 @@ def run_backtest_from_params(validated_data) -> Dict[str, Any]:
     end = validated_data['endDate']
     strategy_name = validated_data['strategy']
     initial_cash = validated_data['capital']
+    interval = validated_data.get('interval', '1d')
 
     if start >= end:
         return {'error': 'Start date must be before end date.'}
@@ -172,50 +178,27 @@ def run_backtest_from_params(validated_data) -> Dict[str, Any]:
     if yf is None:
         return {'error': 'yfinance is not installed or could not be imported.'}
 
-    # Data fetching logic from the original view
     df: Optional[pd.DataFrame] | None = None
-    error_msgs = []
     try:
-        df = yf.download(ticker, start=str(start), end=str(end), 
+        df = yf.download(ticker, start=str(start), end=str(end), interval=interval,
                        progress=False, timeout=10, threads=False)
         if not df.empty:
             df.index = df.index.tz_localize(None)
-    except Exception as e:
-        error_msgs.append(f'Method 1 failed: {e}')
+    except Exception:
         df = None
 
-    # if method 1 failed -> df = None and try the other method
     if df is None or df.empty:
         try:
             ticker_obj = yf.Ticker(ticker)
-            df = ticker_obj.history(start=str(start), end=str(end), timeout=10)
+            df = ticker_obj.history(start=str(start), end=str(end), interval=interval, timeout=10)
             if not df.empty:
                 df.index = df.index.tz_localize(None)
-        except Exception as e:
-            error_msgs.append(f'Method 2 failed: {e}')
+        except Exception:
             df = None
-    # if method 2 failed -> df = None and try the other method
-    if df is None or df.empty:
-        try:
-            df = yf.download(ticker, start=str(start), end=str(end), 
-                           progress=False, auto_adjust=True, prepost=True)
-            if not df.empty:
-                df.index = df.index.tz_localize(None)
-        except Exception as e:
-            error_msgs.append(f'Method 3 failed: {e}')
-            df = None
-    # if we're here both previous methods have failed and we use the sample data
-    if df is None or df.empty:
-        try:
-            df = generate_sample_data(ticker, start, end)
-            all_errors = '; '.join(error_msgs)
-            # For an API, we might return this as a specific field
-            # return {'warning': f'yfinance failed for {ticker}. Using sample data.', 'data': ...}
-        except Exception as e:
-            all_errors = '; '.join(error_msgs)
-            return {'error': f'Could not retrieve data for {ticker}. Errors: {all_errors}'}
 
-    # Data validation
+    if df is None or df.empty:
+        return {'error': f'Could not retrieve data for {ticker}.'}
+
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     df = df.rename(columns={c: c.capitalize() for c in df.columns})
@@ -223,68 +206,73 @@ def run_backtest_from_params(validated_data) -> Dict[str, Any]:
         if col not in df.columns:
             return {'error': f'Incomplete data: missing column {col}'}
 
-    # --- Backtesting Logic ---
-    # Map frontend strategy names to backend strategy file names
     strategy_map = {
-        'SMA': 'sma_cross',
-        'EMA': 'sma_cross', # Example, assuming EMA uses the same file
-        'RSI': 'rsi', # Example for a future strategy
-        'MACD': 'macd', # Example for a future strategy
-        'buy_and_hold': 'buy_and_hold', # Allow direct name
-        'sma_cross': 'sma_cross' # Allow direct name
+        'SMA': 'sma_cross', 'EMA': 'sma_cross', 'RSI': 'rsi', 'MACD': 'macd',
+        'LA_BOMBA': 'la_bomba', 'buy_and_hold': 'buy_and_hold', 'sma_cross': 'sma_cross'
     }
-
     backend_strategy_name = strategy_map.get(strategy_name, strategy_name)
-
-    # --- Timeframe Validation ---
-    if backend_strategy_name == 'sma_cross' and len(df) < 100:
-        return {'error': 'The SMA Cross strategy requires at least 100 days of data. Please select a longer date range.'}
 
     try:
         from backtesting import Backtest
-        BACKTESTING_OK = True
     except ImportError:
-        BACKTESTING_OK = False
-
-    if not BACKTESTING_OK:
-        return {'error': 'The "backtesting" library is not installed on the server.'}
+        return {'error': 'The "backtesting" library is not installed.'}
 
     strategy_class = create_strategy(backend_strategy_name)
     if not strategy_class:
-        return {'error': f'Strategy "{backend_strategy_name}" not found on the backend.'}
+        return {'error': f'Strategy "{backend_strategy_name}" not found.'}
 
     bt = Backtest(df, strategy_class, cash=initial_cash, commission=0.0)
     stats = bt.run()
-    
-    # Sanitize metrics to prevent JSON errors with NaN values
+
+    def get_safe_metric(value):
+        if value is None or np.isnan(value) or np.isinf(value):
+            return 0
+        return round(value, 2)
+
     metrics = {
-        'total_return_pct': np.nan_to_num(round(stats.get('Return [%]', 0), 2)),
-        'cagr_pct': np.nan_to_num(round(stats.get('Return (Ann.) [%]', 0), 2)),
-        'sharpe': np.nan_to_num(round(stats.get('Sharpe Ratio', 0), 2)),
-        'max_drawdown_pct': np.nan_to_num(round(stats.get('Max. Drawdown [%]', 0), 2)),
-        'trades': np.nan_to_num(stats.get('# Trades', 0)),
-        'winrate_pct': np.nan_to_num(round(stats.get('Win Rate [%]', 0), 2)),
+        'total_return_pct': get_safe_metric(stats.get('Return [%]')),
+        'cagr_pct': get_safe_metric(stats.get('Return (Ann.) [%]')),
+        'sharpe': get_safe_metric(stats.get('Sharpe Ratio')),
+        'max_drawdown_pct': get_safe_metric(stats.get('Max. Drawdown [%]')),
+        'trades': int(get_safe_metric(stats.get('# Trades'))),
+        'winrate_pct': get_safe_metric(stats.get('Win Rate [%]'))
     }
 
-    # a future step could be to extract data from the Bokeh plot object.
+    date_format = '%Y-%m-%d %H:%M:%S' if interval not in ['1d', '1wk', '1mo'] else '%Y-%m-%d'
+
     price_chart_data = {
-        'dates': df.index.strftime('%Y-%m-%d').tolist(),
-        'close': df['Close'].tolist(),
-        'sma1': [], # backtesting.py doesn't expose this easily, return empty for now
-        'sma2': [], # backtesting.py doesn't expose this easily, return empty for now
-        'buys': [], # This data is in stats['_trades'], would require more processing
-        'sells': [] # This data is in stats['_trades'], would require more processing
+        'dates': (df.index.astype(np.int64) // 10**6).tolist(),
+        'close': sanitize_series(df['Close']),
+        'sma1': [], 'sma2': [], 'buys': [], 'sells': []
     }
-    # Create a placeholder equity curve
+
+    if hasattr(stats._strategy, 'sma1'):
+        price_chart_data['sma1'] = sanitize_series(stats._strategy.sma1)
+    if hasattr(stats._strategy, 'sma2'):
+        price_chart_data['sma2'] = sanitize_series(stats._strategy.sma2)
+
+    # Create unified buy/sell signal series
+    buy_signals = pd.Series(np.nan, index=df.index)
+    sell_signals = pd.Series(np.nan, index=df.index)
+    trades_df = stats['_trades']
+    if not trades_df.empty:
+        buys = trades_df[trades_df['Size'] > 0]
+        sells = trades_df[trades_df['Size'] < 0]
+        buy_signals.loc[buys['EntryTime']] = buys['EntryPrice'].values
+        sell_signals.loc[sells['EntryTime']] = sells['EntryPrice'].values
+
+    price_chart_data['buy_signals'] = sanitize_series(buy_signals)
+    price_chart_data['sell_signals'] = sanitize_series(sell_signals)
+
     equity_curve = stats['_equity_curve']
     equity_chart_data = {
-        'dates': equity_curve.index.strftime('%Y-%m-%d').tolist(),
-        'equity': equity_curve['Equity'].tolist(),
+        'dates': (equity_curve.index.astype(np.int64) // 10**6).tolist(),
+        'equity': sanitize_series(equity_curve['Equity']),
     }
 
     return {
-        'metrics': metrics, 
-        'price_chart': price_chart_data, 
+        'metrics': metrics,
+        'price_chart': price_chart_data,
         'equity_chart': equity_chart_data
     }
 

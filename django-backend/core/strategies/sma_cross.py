@@ -3,8 +3,8 @@ from backtesting.lib import crossover
 from backtesting.test import SMA
 
 class SmaCross(Strategy):
-    n1 = 50
-    n2 = 100
+    n1 = 10 
+    n2 = 50
 
     def init(self):
         self.sma1 = self.I(SMA, self.data.Close, self.n1)

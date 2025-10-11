@@ -6,6 +6,7 @@ class BacktestSerializer(serializers.Serializer):
     endDate = serializers.DateField()
     strategy = serializers.CharField(max_length=100)
     capital = serializers.FloatField()
+    interval = serializers.CharField(required=False, default='1d')
 
     def validate(self, attrs):
         """
