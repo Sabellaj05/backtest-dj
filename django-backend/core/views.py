@@ -128,58 +128,58 @@ def simple_backtest(df, n1, n2, initial_cash=10000.0, commission=0.0):
     return equity_df, trades, df
 
 
-def compute_metrics(equity_df: pd.DataFrame, trades, initial_cash) -> Dict[str, Any]:
-    equity = equity_df["equity"]
-    total_return = (equity.iloc[-1] / equity.iloc[0] - 1) * 100
-    days = (equity_df.index[-1] - equity_df.index[0]).days or 1
-    years = days / 365.25
-    cagr = (equity.iloc[-1] / equity.iloc[0]) ** (1 / years) - 1 if years > 0 else 0
+# def compute_metrics(equity_df: pd.DataFrame, trades, initial_cash) -> Dict[str, Any]:
+#     equity = equity_df["equity"]
+#     total_return = (equity.iloc[-1] / equity.iloc[0] - 1) * 100
+#     days = (equity_df.index[-1] - equity_df.index[0]).days or 1
+#     years = days / 365.25
+#     cagr = (equity.iloc[-1] / equity.iloc[0]) ** (1 / years) - 1 if years > 0 else 0
 
-    daily_returns = equity.pct_change().dropna()
-    # sharpe ratio
-    sharpe = np.nan_to_num(
-        (daily_returns.mean() / daily_returns.std()) * (252**0.5)
-        if len(daily_returns) > 1 and daily_returns.std() > 0
-        else 0
-    )
+#     daily_returns = equity.pct_change().dropna()
+#     # sharpe ratio
+#     sharpe = np.nan_to_num(
+#         (daily_returns.mean() / daily_returns.std()) * (252**0.5)
+#         if len(daily_returns) > 1 and daily_returns.std() > 0
+#         else 0
+#     )
 
-    running_max = equity.cummax()
-    drawdown = (equity - running_max) / running_max
-    max_drawdown = drawdown.min()
+#     running_max = equity.cummax()
+#     drawdown = (equity - running_max) / running_max
+#     max_drawdown = drawdown.min()
 
-    # trades statistics
-    wins = 0
-    pnl_list = []
-    # pair buys and sells
-    buy = None
-    for t in trades:
-        if t["type"] == "buy":
-            buy = t
-        elif t["type"] == "sell" and buy is not None:
-            profit = (t["price"] - buy["price"]) * t["shares"]
-            pnl_pct = (t["price"] / buy["price"] - 1) * 100
-            pnl_list.append(pnl_pct)
-            if profit > 0:
-                wins += 1
-            buy = None
-    trade_count = (
-        sum(1 for t in trades if t["type"] == "buy" or t["type"] == "sell") // 2 * 2
-    )
-    trades_executed = int(len(pnl_list))
-    winrate = (wins / trades_executed) * 100 if trades_executed > 0 else 0
-    avg_return_per_trade = np.nan_to_num(
-        float(pd.Series(pnl_list).mean()) if pnl_list else 0
-    )
+#     # trades statistics
+#     wins = 0
+#     pnl_list = []
+#     # pair buys and sells
+#     buy = None
+#     for t in trades:
+#         if t["type"] == "buy":
+#             buy = t
+#         elif t["type"] == "sell" and buy is not None:
+#             profit = (t["price"] - buy["price"]) * t["shares"]
+#             pnl_pct = (t["price"] / buy["price"] - 1) * 100
+#             pnl_list.append(pnl_pct)
+#             if profit > 0:
+#                 wins += 1
+#             buy = None
+#     trade_count = (
+#         sum(1 for t in trades if t["type"] == "buy" or t["type"] == "sell") // 2 * 2
+#     )
+#     trades_executed = int(len(pnl_list))
+#     winrate = (wins / trades_executed) * 100 if trades_executed > 0 else 0
+#     avg_return_per_trade = np.nan_to_num(
+#         float(pd.Series(pnl_list).mean()) if pnl_list else 0
+#     )
 
-    return {
-        "total_return_pct": round(float(total_return), 2),
-        "cagr_pct": round(float(cagr * 100), 2),
-        "sharpe": round(float(sharpe), 2),
-        "max_drawdown_pct": round(float(max_drawdown * 100), 2),
-        "trades": trades_executed,
-        "winrate_pct": round(float(winrate), 2),
-        "avg_return_per_trade_pct": round(float(avg_return_per_trade), 2),
-    }
+#     return {
+#         "total_return_pct": round(float(total_return), 2),
+#         "cagr_pct": round(float(cagr * 100), 2),
+#         "sharpe": round(float(sharpe), 2),
+#         "max_drawdown_pct": round(float(max_drawdown * 100), 2),
+#         "trades": trades_executed,
+#         "winrate_pct": round(float(winrate), 2),
+#         "avg_return_per_trade_pct": round(float(avg_return_per_trade), 2),
+#     }
 
 
 from bokeh.embed import components
