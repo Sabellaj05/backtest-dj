@@ -1,13 +1,3 @@
-venv/
-*.pyc
-__pycache__/
-db.sqlite3
-.env
-.idea/
-.vscode/
-.claude/
-.zed/
-typings/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -150,3 +140,4 @@ dmypy.json
 # OS
 .DS_Store
 Thumbs.db
+

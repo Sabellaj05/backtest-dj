@@ -13,6 +13,7 @@ from .services.backtest import run_backtest
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
+
 # Generate sample stock data when yfinance fails
 def generate_sample_data(ticker, start, end, initial_price=100) -> pd.DataFrame:
     """Generate realistic sample stock data with trend and volatility"""
@@ -119,14 +120,12 @@ def simple_backtest(df, n1, n2, initial_cash=10000.0, commission=0.0):
     equity_df = pd.DataFrame(equity_list).set_index("date")
     return equity_df, trades, df
 
-
 def sanitize_series(series_or_list):
     """Replaces NaN/inf with None and converts valid numbers to standard floats."""
     return [
         None if x is None or np.isnan(x) or np.isinf(x) else float(x)
         for x in series_or_list
     ]
-
 
 class BacktestAPIView(APIView):
     """
