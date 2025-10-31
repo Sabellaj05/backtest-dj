@@ -9,17 +9,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .serializers import BacktestSerializer
+from django.utils import timezone
+from .models import BacktestRun, Trade, EquityPoint
 from .strategies.factory import create_strategy
 
+from backtesting import Backtest
+import yfinance as yf
+
 warnings.simplefilter(action="ignore", category=FutureWarning)
-
-# Optional libraries
-try:
-    import yfinance as yf
-except Exception as e:
-    print(f"Error importing yfinance: {e}")
-    yf = None
-
 
 # Generate sample stock data when yfinance fails
 def generate_sample_data(ticker, start, end, initial_price=100) -> pd.DataFrame:
@@ -128,65 +125,6 @@ def simple_backtest(df, n1, n2, initial_cash=10000.0, commission=0.0):
     return equity_df, trades, df
 
 
-# def compute_metrics(equity_df: pd.DataFrame, trades, initial_cash) -> Dict[str, Any]:
-#     equity = equity_df["equity"]
-#     total_return = (equity.iloc[-1] / equity.iloc[0] - 1) * 100
-#     days = (equity_df.index[-1] - equity_df.index[0]).days or 1
-#     years = days / 365.25
-#     cagr = (equity.iloc[-1] / equity.iloc[0]) ** (1 / years) - 1 if years > 0 else 0
-
-#     daily_returns = equity.pct_change().dropna()
-#     # sharpe ratio
-#     sharpe = np.nan_to_num(
-#         (daily_returns.mean() / daily_returns.std()) * (252**0.5)
-#         if len(daily_returns) > 1 and daily_returns.std() > 0
-#         else 0
-#     )
-
-#     running_max = equity.cummax()
-#     drawdown = (equity - running_max) / running_max
-#     max_drawdown = drawdown.min()
-
-#     # trades statistics
-#     wins = 0
-#     pnl_list = []
-#     # pair buys and sells
-#     buy = None
-#     for t in trades:
-#         if t["type"] == "buy":
-#             buy = t
-#         elif t["type"] == "sell" and buy is not None:
-#             profit = (t["price"] - buy["price"]) * t["shares"]
-#             pnl_pct = (t["price"] / buy["price"] - 1) * 100
-#             pnl_list.append(pnl_pct)
-#             if profit > 0:
-#                 wins += 1
-#             buy = None
-#     trade_count = (
-#         sum(1 for t in trades if t["type"] == "buy" or t["type"] == "sell") // 2 * 2
-#     )
-#     trades_executed = int(len(pnl_list))
-#     winrate = (wins / trades_executed) * 100 if trades_executed > 0 else 0
-#     avg_return_per_trade = np.nan_to_num(
-#         float(pd.Series(pnl_list).mean()) if pnl_list else 0
-#     )
-
-#     return {
-#         "total_return_pct": round(float(total_return), 2),
-#         "cagr_pct": round(float(cagr * 100), 2),
-#         "sharpe": round(float(sharpe), 2),
-#         "max_drawdown_pct": round(float(max_drawdown * 100), 2),
-#         "trades": trades_executed,
-#         "winrate_pct": round(float(winrate), 2),
-#         "avg_return_per_trade_pct": round(float(avg_return_per_trade), 2),
-#     }
-
-
-from bokeh.embed import components
-
-from .strategies.factory import create_strategy
-
-
 def sanitize_series(series_or_list):
     """Replaces NaN/inf with None and converts valid numbers to standard floats."""
     return [
@@ -260,16 +198,13 @@ def run_backtest_from_params(validated_data) -> Dict[str, Any]:
     }
     backend_strategy_name = strategy_map.get(strategy_name, strategy_name)
 
-    try:
-        from backtesting import Backtest
-    except ImportError:
-        return {"error": 'The "backtesting" library is not installed.'}
-
     strategy_class = create_strategy(backend_strategy_name)
     if not strategy_class:
         return {"error": f'Strategy "{backend_strategy_name}" not found.'}
 
+    # instanciamos el backtester
     bt = Backtest(df, strategy_class, cash=initial_cash, commission=0.0)
+    # resultados
     stats = bt.run()
 
     def get_safe_metric(value):
@@ -286,9 +221,9 @@ def run_backtest_from_params(validated_data) -> Dict[str, Any]:
         "winrate_pct": get_safe_metric(stats.get("Win Rate [%]")),
     }
 
-    date_format = (
-        "%Y-%m-%d %H:%M:%S" if interval not in ["1d", "1wk", "1mo"] else "%Y-%m-%d"
-    )
+    # date_format = (
+    #     "%Y-%m-%d %H:%M:%S" if interval not in ["1d", "1wk", "1mo"] else "%Y-%m-%d"
+    # )
 
     price_chart_data = {
         "dates": (df.index.astype(np.int64) // 10**6).tolist(),
@@ -322,6 +257,89 @@ def run_backtest_from_params(validated_data) -> Dict[str, Any]:
         "dates": (equity_curve.index.astype(np.int64) // 10**6).tolist(),
         "equity": sanitize_series(equity_curve["Equity"]),
     }
+
+    # Persist run, trades, and equity curve
+    try:
+        run = BacktestRun.objects.create(
+            ticker=ticker,
+            start_date=start,
+            end_date=end,
+            strategy=backend_strategy_name,
+            starting_capital=initial_cash,
+            interval=interval,
+            total_return_pct=float(metrics["total_return_pct"]),
+            cagr_pct=float(metrics["cagr_pct"]),
+            sharpe=float(metrics["sharpe"]),
+            max_drawdown_pct=float(metrics["max_drawdown_pct"]),
+            trades=int(metrics["trades"]),
+            winrate_pct=float(metrics["winrate_pct"]),
+        )
+
+        # Persist trades (completed trades from trades_df)
+        trade_rows = []
+        if isinstance(trades_df, pd.DataFrame) and not trades_df.empty:
+            for _, row in trades_df.iterrows():
+                entry_time = row.get("EntryTime")
+                exit_time = row.get("ExitTime")
+                # Convert to aware datetimes if needed
+                if pd.notna(entry_time):
+                    if getattr(entry_time, "tzinfo", None) is None:
+                        entry_time = timezone.make_aware(entry_time.to_pydatetime())
+                    else:
+                        entry_time = entry_time.to_pydatetime()
+                else:
+                    entry_time = None
+                if pd.notna(exit_time):
+                    if getattr(exit_time, "tzinfo", None) is None:
+                        exit_time = timezone.make_aware(exit_time.to_pydatetime())
+                    else:
+                        exit_time = exit_time.to_pydatetime()
+                else:
+                    exit_time = None
+
+                entry_price = float(row.get("EntryPrice", np.nan)) if pd.notna(row.get("EntryPrice")) else None
+                exit_price = float(row.get("ExitPrice", np.nan)) if pd.notna(row.get("ExitPrice")) else None
+                size = float(row.get("Size", 0) or 0)
+                pnl = float(row.get("PnL", np.nan)) if pd.notna(row.get("PnL")) else None
+                return_pct = float(row.get("ReturnPct", np.nan)) if pd.notna(row.get("ReturnPct")) else None
+
+                duration_seconds = None
+                if entry_time and exit_time:
+                    duration_seconds = int((exit_time - entry_time).total_seconds())
+
+                trade_rows.append(
+                    Trade(
+                        run=run,
+                        entry_time=entry_time,
+                        exit_time=exit_time,
+                        entry_price=entry_price if entry_price is not None else 0.0,
+                        exit_price=exit_price,
+                        size=size,
+                        pnl=pnl,
+                        return_pct=return_pct,
+                        duration_seconds=duration_seconds,
+                    )
+                )
+
+        if trade_rows:
+            Trade.objects.bulk_create(trade_rows, batch_size=500)
+
+        # Persist equity curve
+        equity_rows = []
+        if isinstance(equity_curve, pd.DataFrame) and not equity_curve.empty:
+            for ts, erow in equity_curve.iterrows():
+                ts_dt = ts.to_pydatetime()
+                if getattr(ts_dt, "tzinfo", None) is None:
+                    ts_dt = timezone.make_aware(ts_dt)
+                equity_val = float(erow.get("Equity", np.nan))
+                if not np.isnan(equity_val) and not np.isinf(equity_val):
+                    equity_rows.append(EquityPoint(run=run, timestamp=ts_dt, equity=equity_val))
+
+        if equity_rows:
+            EquityPoint.objects.bulk_create(equity_rows, batch_size=1000)
+    except Exception as e:
+        # Do not fail the API if persistence fails; surface metrics to user regardless
+        print(f"Persistence error: {e}")
 
     return {
         "metrics": metrics,
