@@ -15,7 +15,7 @@ class BacktestResult(models.Model):
     cagr_pct = models.FloatField()
     sharpe = models.FloatField()
     max_drawdown_pct = models.FloatField()
-    trades = models.IntegerChoices()
+    trades = models.IntegerField()
     winrate_pct = models.FloatField()
 
     # timestamp
@@ -24,8 +24,10 @@ class BacktestResult(models.Model):
     )
 
     def __str__(self):
-        return f"{self.ticker} - {self.strategy} ({self.created_at.strftime('%Y-%m-%d')"
+        return (
+            f"{self.ticker} - {self.strategy} ({self.created_at.strftime('%Y-%m-%d')})"
+        )
 
     class Meta:
         # newest results first
-        orderding = ["-created_at"]
+        ordering = ["-created_at"]
