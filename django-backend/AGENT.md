@@ -15,21 +15,25 @@ This document orients agents working on the Django backend of the Backtester app
   - DB: SQLite at `backtester/db.sqlite3`
 - App: `core`
   - API endpoint: `POST /api/v1/backtest/`
-  - `views.py`: request validation, data fetch, strategy execution, response assembly
+  - `views.py`: Thin API endpoint delegating to service layer
+  - `services/backtest.py`: Service layer orchestrating backtest execution and persistence
   - `serializers.py`: `BacktestSerializer` input validation
-  - `models.py`: persistence model(s) for backtest results
-  - `strategies/`: strategy factory and strategies (e.g., `sma_cross`, `buy_and_hold`, `la_bomba`)
+  - `models.py`: ORM models for persistence
+  - `strategies/`: Strategy factory and implementations (e.g., `sma_cross`, `buy_and_hold`, `la_bomba`)
+  - `admin.py`: Django admin configuration for models
 
 ### Request Flow
 1. Frontend posts form data to `POST /api/v1/backtest/`.
 2. `BacktestAPIView.post` validates payload with `BacktestSerializer`.
-3. `run_backtest_from_params`:
-   - Downloads OHLCV from `yfinance` with interval handling
+3. Delegates to service layer: `run_backtest()` from `core.services.backtest`.
+4. Service orchestrates:
+   - Downloads OHLCV from `yfinance` with interval handling (`fetch_ohlcv`)
    - Normalizes columns (`Open/High/Low/Close/Volume`)
-   - Maps UI strategy name to backend strategy slug
-   - Uses `backtesting.Backtest` with a strategy class from `core.strategies.factory.create_strategy`
-   - Produces metrics, price chart series (dates, close, SMA overlays, buy/sell markers) and equity curve
-4. Response returns `{ metrics, price_chart, equity_chart }` or `{ error }` with appropriate status code.
+   - Maps UI strategy name to backend slug via `resolve_strategy_name`
+   - Executes backtest using `execute_backtest` which uses `core.strategies.factory.create_strategy`
+   - Builds metrics, price chart, and equity curve
+   - Persists results to database
+5. Response returns `{ metrics, price_chart, equity_chart }` or `{ error }` with appropriate status code.
 
 ### Key Files (pointers)
 - Routing:
@@ -45,13 +49,13 @@ urlpatterns = [
     path('api/v1/backtest/', views.BacktestAPIView.as_view(), name='api_backtest'),
 ]
 ```
-- API view and execution path:
-```333:351:/Users/saens/thecode/web/django-project/django-backend/core/views.py
+- API view:
+```131:148:/Users/saens/thecode/web/django-project/django-backend/core/views.py
 class BacktestAPIView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = BacktestSerializer(data=request.data)
         if serializer.is_valid():
-            results = run_backtest_from_params(serializer.validated_data)
+            results = run_backtest(serializer.validated_data)
             if "error" in results:
                 return Response(results, status=status.HTTP_400_BAD_REQUEST)
             return Response(results, status=status.HTTP_200_OK)
@@ -83,44 +87,24 @@ Dates are returned as epoch millis (ns // 1e6) arrays.
   - `buy_and_hold` → `buy_and_hold`
 - Strategy classes are resolved via `core.strategies.factory.create_strategy` and run by `backtesting.Backtest`.
 
-### Persistence Model (current and plan)
+### Persistence Models
 
-Current model in `core/models.py`:
-```5:34:/Users/saens/thecode/web/django-project/django-backend/core/models.py
-class BacktestResult(models.Model):
-    ticker = models.CharField(max_length=20)
-    start_date = models.DateField()
-    end_date = models.DateField()
-    strategy = models.CharField(max_length=100)
-    starting_capital = models.FloatField()
-    total_return_pct = models.FloatField()
-    cagr_pct = models.FloatField()
-    sharpe = models.FloatField()
-    max_drawdown_pct = models.FloatField()
-    trades = models.IntegerField()
-    winrate_pct = models.FloatField()
-    created_at = models.DateTimeField(auto_now_add=True)
-    class Meta:
-        ordering = ["-created_at"]
-```
+**Implemented V3 Full-Fidelity Schema** in `core/models.py`:
 
-Recommended incremental plan:
-1) Minimal v1 (already partially present)
-   - Persist run configuration and summary metrics only (`BacktestResult`).
-   - Save to DB after a successful backtest.
+- **`BacktestRun`**: Main run record with configuration and summary metrics
+  - Fields: ticker, start_date, end_date, strategy, starting_capital, interval
+  - Metrics: total_return_pct, cagr_pct, sharpe, max_drawdown_pct, trades, winrate_pct
+  - Indexed on `(ticker, strategy, start_date, end_date)`
+  
+- **`Trade`**: Individual trade records (FK to `BacktestRun`)
+  - Fields: entry_time, exit_time, entry_price, exit_price, size, pnl, return_pct, duration_seconds
+  - Indexed on `(run, entry_time)`
+  
+- **`EquityPoint`**: Equity curve data points (FK to `BacktestRun`)
+  - Fields: timestamp, equity
+  - Indexed on `(run, timestamp)`
 
-2) Enhanced v2
-   - Add JSON blobs for visualizations to avoid row explosion:
-     - `price_chart_json`: JSONField (dates, close, overlays, buy/sell markers)
-     - `equity_chart_json`: JSONField (dates, equity)
-   - Optional indexing fields (e.g., `interval`, `duration_days`).
-
-3) Full fidelity v3 (optional)
-   - Separate tables if analytics on trades are needed:
-     - `BacktestRun` (one row per run)
-     - `Trade` (FK to run; entry/exit times, prices, size, pnl)
-     - `EquityPoint` (FK to run; timestamp, equity)
-   - This is heavier but enables SQL analytics; JSON v2 is often sufficient for product needs.
+All runs are automatically persisted on successful completion via the service layer.
 
 ### Data Mapping (serializer → model)
 - `ticker` → `ticker`
@@ -146,6 +130,48 @@ Recommended incremental plan:
 - `yfinance` availability: errors surface as `{ error }`; ensure frontend handles 400 with message.
 - Interval handling changes date format and data density; epoch‑millis used to keep frontend rendering consistent.
 - Strategy placeholders (`EMA`, `RSI`, `MACD`) currently route to available implementations; add real strategies later.
+
+---
+
+## Refactoring (Latest)
+
+The backtest execution flow has been refactored into a service layer for better modularity and testability.
+
+### Architecture
+
+**Service Layer (`core/services/backtest.py`)**:
+- `run_backtest()`: Main orchestration entry point
+- `fetch_ohlcv()`: Data retrieval from yfinance
+- `resolve_strategy_name()`: Maps UI strategy names to backend implementations
+- `execute_backtest()`: Executes backtest using strategy factory
+- `compute_metrics()`: Extracts and sanitizes performance metrics
+- `build_price_chart()`: Constructs price chart with indicators and signals
+- `build_equity_chart()`: Constructs equity curve data
+- `persist_backtest_results()`: Saves run, trades, and equity points to DB
+
+**View Layer (`core/views.py`)**:
+- `BacktestAPIView`: Thin API endpoint that delegates to service layer
+
+**Key Benefits**:
+1. **Separation of concerns**: View handles HTTP, service handles business logic
+2. **Testability**: Each service function can be unit tested independently
+3. **Maintainability**: Clear function boundaries, single responsibility
+4. **Reusability**: Service functions can be reused in other contexts (CLI, management commands, etc.)
+5. **Strategy Factory preserved**: `execute_backtest()` uses `create_strategy()` exactly as before
+
+### Database Models
+
+**V3 Full-Fidelity Schema**:
+- `BacktestRun`: Main run record with config + summary metrics
+  - Indexed on `(ticker, strategy, start_date, end_date)`
+- `Trade`: Individual trade records (FK to `BacktestRun`)
+  - Indexed on `(run, entry_time)`
+  - Fields: entry/exit times, prices, size, PnL, return_pct, duration
+- `EquityPoint`: Equity curve data points (FK to `BacktestRun`)
+  - Indexed on `(run, timestamp)`
+  - Fields: timestamp, equity value
+
+All runs are automatically persisted on successful completion.
 
 ---
 Maintainer notes: Keep this file updated when endpoints, models, or strategy mappings change.
