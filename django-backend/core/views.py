@@ -1,74 +1,75 @@
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from .serializers import BacktestSerializer
-from .strategies.factory import create_strategy
-import pandas as pd
-import numpy as np
-import datetime
-from typing import Dict, Any, Optional
 import warnings
+from typing import Any, Dict
+
+import numpy as np
+import pandas as pd
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from .serializers import BacktestSerializer
+from .services.backtest import run_backtest
+
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
-# Optional libraries
-try:
-    import yfinance as yf
-except Exception as e:
-    print(f"Error importing yfinance: {e}")
-    yf = None
 
 # Generate sample stock data when yfinance fails
 def generate_sample_data(ticker, start, end, initial_price=100) -> pd.DataFrame:
     """Generate realistic sample stock data with trend and volatility"""
-    dates = pd.date_range(start=start, end=end, freq='D')
+    dates = pd.date_range(start=start, end=end, freq="D")
     # Filter out weekends (only keep Mon-Fri)
     dates = dates[dates.weekday < 5]
-    
+
     n_days = len(dates)
     np.random.seed(42)  # For reproducible results
-    
+
     # Generate price movement with trend and volatility
-    daily_returns = np.random.normal(0.0008, 0.02, n_days)  # ~0.08% daily return, 2% volatility
+    daily_returns = np.random.normal(
+        0.0008, 0.02, n_days
+    )  # ~0.08% daily return, 2% volatility
     # Add a slight upward trend
     trend = np.linspace(0, 0.001, n_days)
     daily_returns += trend
-    
+
     # Calculate cumulative prices
     price_series = [initial_price]
     for i in range(1, n_days):
         new_price = price_series[-1] * (1 + daily_returns[i])
         price_series.append(new_price)
-    
+
     # Generate OHLC data with realistic intraday movements
     data = []
     for i, (date, close_price) in enumerate(zip(dates, price_series)):
         daily_vol = abs(np.random.normal(0, 0.015))  # Daily volatility
         high = close_price * (1 + daily_vol)
         low = close_price * (1 - daily_vol)
-        open_price = price_series[i-1] if i > 0 else close_price
+        open_price = price_series[i - 1] if i > 0 else close_price
         volume = int(np.random.normal(1000000, 200000))  # Random volume
-        
-        data.append({
-            'Open': max(low, min(high, open_price)),
-            'High': high,
-            'Low': low,
-            'Close': close_price,
-            'Volume': max(100000, volume)
-        })
-    
+
+        data.append(
+            {
+                "Open": max(low, min(high, open_price)),
+                "High": high,
+                "Low": low,
+                "Close": close_price,
+                "Volume": max(100000, volume),
+            }
+        )
+
     df = pd.DataFrame(data, index=dates)
     return df
+
 
 # Simple fallback backtester (SMA crossover) that does not rely on backtesting.py internals.
 def simple_backtest(df, n1, n2, initial_cash=10000.0, commission=0.0):
     df = df.copy().sort_index()
-    df['sma1'] = df['Close'].rolling(n1).mean()
-    df['sma2'] = df['Close'].rolling(n2).mean()
-    df.dropna(subset=['sma1', 'sma2'], inplace=True)
+    df["sma1"] = df["Close"].rolling(n1).mean()
+    df["sma2"] = df["Close"].rolling(n2).mean()
+    df.dropna(subset=["sma1", "sma2"], inplace=True)
 
-    df['signal'] = 0
-    df['signal'] = np.where(df['sma1'] > df['sma2'], 1, 0)
-    df['position_change'] = df['signal'].diff().fillna(0)
+    df["signal"] = 0
+    df["signal"] = np.where(df["sma1"] > df["sma2"], 1, 0)
+    df["position_change"] = df["signal"].diff().fillna(0)
 
     cash = float(initial_cash)
     position = 0
@@ -80,216 +81,68 @@ def simple_backtest(df, n1, n2, initial_cash=10000.0, commission=0.0):
         row = df.iloc[i]
         # Price used for execution: next day's Open when possible, otherwise current Close
         if i + 1 < len(df):
-            exec_price = float(df.iloc[i+1]['Open'])
+            exec_price = float(df.iloc[i + 1]["Open"])
         else:
-            exec_price = float(row['Close'])
+            exec_price = float(row["Close"])
 
         # Buy signal
-        if row['position_change'] == 1:
+        if row["position_change"] == 1:
             # invest all cash
             shares = int((cash * (1 - commission)) // exec_price)
             if shares > 0:
                 spent = shares * exec_price
                 cash -= spent * (1 + commission)
                 position += shares
-                trades.append({'date': date, 'type': 'buy', 'price': exec_price, 'shares': shares})
+                trades.append(
+                    {"date": date, "type": "buy", "price": exec_price, "shares": shares}
+                )
         # Sell signal
-        elif row['position_change'] == -1:
+        elif row["position_change"] == -1:
             if position > 0:
                 received = position * exec_price
                 cash += received * (1 - commission)
-                trades.append({'date': date, 'type': 'sell', 'price': exec_price, 'shares': position})
+                trades.append(
+                    {
+                        "date": date,
+                        "type": "sell",
+                        "price": exec_price,
+                        "shares": position,
+                    }
+                )
                 position = 0
 
-        equity = cash + position * float(row['Close'])
-        equity_list.append({'date': date, 'equity': equity, 'cash': cash, 'position': position})
+        equity = cash + position * float(row["Close"])
+        equity_list.append(
+            {"date": date, "equity": equity, "cash": cash, "position": position}
+        )
 
-    equity_df = pd.DataFrame(equity_list).set_index('date')
+    equity_df = pd.DataFrame(equity_list).set_index("date")
     return equity_df, trades, df
-
-def compute_metrics(equity_df: pd.DataFrame, trades, initial_cash) -> Dict[str, Any]:
-    equity = equity_df['equity']
-    total_return = (equity.iloc[-1] / equity.iloc[0] - 1) * 100
-    days = (equity_df.index[-1] - equity_df.index[0]).days or 1
-    years = days / 365.25
-    cagr = (equity.iloc[-1] / equity.iloc[0]) ** (1 / years) - 1 if years > 0 else 0
-
-    daily_returns = equity.pct_change().dropna()
-    # sharpe ratio
-    sharpe = np.nan_to_num((daily_returns.mean() / daily_returns.std()) * (252 ** 0.5) if len(daily_returns) > 1 and daily_returns.std() > 0 else 0)
-
-    running_max = equity.cummax()
-    drawdown = (equity - running_max) / running_max
-    max_drawdown = drawdown.min()
-
-    # trades statistics
-    wins = 0
-    pnl_list = []
-    # pair buys and sells
-    buy = None
-    for t in trades:
-        if t['type'] == 'buy':
-            buy = t
-        elif t['type'] == 'sell' and buy is not None:
-            profit = (t['price'] - buy['price']) * t['shares']
-            pnl_pct = (t['price'] / buy['price'] - 1) * 100
-            pnl_list.append(pnl_pct)
-            if profit > 0:
-                wins += 1
-            buy = None
-    trade_count = sum(1 for t in trades if t['type'] == 'buy' or t['type'] == 'sell') // 2 * 2
-    trades_executed = int(len(pnl_list))
-    winrate = (wins / trades_executed) * 100 if trades_executed > 0 else 0
-    avg_return_per_trade = np.nan_to_num(float(pd.Series(pnl_list).mean()) if pnl_list else 0)
-
-    return {
-        'total_return_pct': round(float(total_return), 2),
-        'cagr_pct': round(float(cagr * 100), 2),
-        'sharpe': round(float(sharpe), 2),
-        'max_drawdown_pct': round(float(max_drawdown * 100), 2),
-        'trades': trades_executed,
-        'winrate_pct': round(float(winrate), 2),
-        'avg_return_per_trade_pct': round(float(avg_return_per_trade), 2),
-    }
-
-from .strategies.factory import create_strategy
-
-from bokeh.embed import components
 
 
 def sanitize_series(series_or_list):
     """Replaces NaN/inf with None and converts valid numbers to standard floats."""
-    return [None if x is None or np.isnan(x) or np.isinf(x) else float(x) for x in series_or_list]
+    return [
+        None if x is None or np.isnan(x) or np.isinf(x) else float(x)
+        for x in series_or_list
+    ]
 
-def run_backtest_from_params(validated_data) -> Dict[str, Any]:
-    """
-    Runs the backtest with the given parameters and returns the results.
-    """
-    ticker = validated_data['ticker'].strip().upper()
-    start = validated_data['startDate']
-    end = validated_data['endDate']
-    strategy_name = validated_data['strategy']
-    initial_cash = validated_data['capital']
-    interval = validated_data.get('interval', '1d')
-
-    if start >= end:
-        return {'error': 'Start date must be before end date.'}
-
-    if yf is None:
-        return {'error': 'yfinance is not installed or could not be imported.'}
-
-    df: Optional[pd.DataFrame] | None = None
-    try:
-        df = yf.download(ticker, start=str(start), end=str(end), interval=interval,
-                       progress=False, timeout=10, threads=False)
-        if not df.empty:
-            df.index = df.index.tz_localize(None)
-    except Exception:
-        df = None
-
-    if df is None or df.empty:
-        try:
-            ticker_obj = yf.Ticker(ticker)
-            df = ticker_obj.history(start=str(start), end=str(end), interval=interval, timeout=10)
-            if not df.empty:
-                df.index = df.index.tz_localize(None)
-        except Exception:
-            df = None
-
-    if df is None or df.empty:
-        return {'error': f'Could not retrieve data for {ticker}.'}
-
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-    df = df.rename(columns={c: c.capitalize() for c in df.columns})
-    for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
-        if col not in df.columns:
-            return {'error': f'Incomplete data: missing column {col}'}
-
-    strategy_map = {
-        'SMA': 'sma_cross', 'EMA': 'sma_cross', 'RSI': 'rsi', 'MACD': 'macd',
-        'LA_BOMBA': 'la_bomba', 'buy_and_hold': 'buy_and_hold', 'sma_cross': 'sma_cross'
-    }
-    backend_strategy_name = strategy_map.get(strategy_name, strategy_name)
-
-    try:
-        from backtesting import Backtest
-    except ImportError:
-        return {'error': 'The "backtesting" library is not installed.'}
-
-    strategy_class = create_strategy(backend_strategy_name)
-    if not strategy_class:
-        return {'error': f'Strategy "{backend_strategy_name}" not found.'}
-
-    bt = Backtest(df, strategy_class, cash=initial_cash, commission=0.0)
-    stats = bt.run()
-
-    def get_safe_metric(value):
-        if value is None or np.isnan(value) or np.isinf(value):
-            return 0
-        return round(value, 2)
-
-    metrics = {
-        'total_return_pct': get_safe_metric(stats.get('Return [%]')),
-        'cagr_pct': get_safe_metric(stats.get('Return (Ann.) [%]')),
-        'sharpe': get_safe_metric(stats.get('Sharpe Ratio')),
-        'max_drawdown_pct': get_safe_metric(stats.get('Max. Drawdown [%]')),
-        'trades': int(get_safe_metric(stats.get('# Trades'))),
-        'winrate_pct': get_safe_metric(stats.get('Win Rate [%]'))
-    }
-
-    date_format = '%Y-%m-%d %H:%M:%S' if interval not in ['1d', '1wk', '1mo'] else '%Y-%m-%d'
-
-    price_chart_data = {
-        'dates': (df.index.astype(np.int64) // 10**6).tolist(),
-        'close': sanitize_series(df['Close']),
-        'sma1': [], 'sma2': [], 'buys': [], 'sells': []
-    }
-
-    if hasattr(stats._strategy, 'sma1'):
-        price_chart_data['sma1'] = sanitize_series(stats._strategy.sma1)
-    if hasattr(stats._strategy, 'sma2'):
-        price_chart_data['sma2'] = sanitize_series(stats._strategy.sma2)
-
-    # Create unified buy/sell signal series
-    buy_signals = pd.Series(np.nan, index=df.index)
-    sell_signals = pd.Series(np.nan, index=df.index)
-    trades_df = stats['_trades']
-    if not trades_df.empty:
-        buys = trades_df[trades_df['Size'] > 0]
-        sells = trades_df[trades_df['Size'] < 0]
-        buy_signals.loc[buys['EntryTime']] = buys['EntryPrice'].values
-        sell_signals.loc[sells['EntryTime']] = sells['EntryPrice'].values
-
-    price_chart_data['buy_signals'] = sanitize_series(buy_signals)
-    price_chart_data['sell_signals'] = sanitize_series(sell_signals)
-
-    equity_curve = stats['_equity_curve']
-    equity_chart_data = {
-        'dates': (equity_curve.index.astype(np.int64) // 10**6).tolist(),
-        'equity': sanitize_series(equity_curve['Equity']),
-    }
-
-    return {
-        'metrics': metrics,
-        'price_chart': price_chart_data,
-        'equity_chart': equity_chart_data
-    }
 
 class BacktestAPIView(APIView):
     """
     API view to handle backtesting requests from the frontend.
     """
+
     def post(self, request, *args, **kwargs):
         serializer = BacktestSerializer(data=request.data)
         if serializer.is_valid():
-            # Call the refactored logic function
-            results: Dict[str, Any] = run_backtest_from_params(serializer.validated_data)
-            
-            # Check if the logic function returned an error
-            if 'error' in results:
+            # Call the service layer
+            results: Dict[str, Any] = run_backtest(serializer.validated_data)
+
+            # Check if the service returned an error
+            if "error" in results:
                 return Response(results, status=status.HTTP_400_BAD_REQUEST)
-            
+
             return Response(results, status=status.HTTP_200_OK)
-        
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
