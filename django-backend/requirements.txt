@@ -8,4 +8,6 @@ backtesting==0.3.3
 bokeh==2.4.3
 djangorestframework
 django-cors-headers
+gunicorn
+duckdb-engine
 #MetaTrader5

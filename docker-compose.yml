@@ -1,0 +1,18 @@
+services:
+  backend:
+    build:
+      context: ./django-backend
+    env_file:
+      - ./django-backend/.env
+    volumes:
+      - static_volume:/app/static
+      - media_volume:/app/media
+    expose:
+      - 8000
+    command: >
+      sh -c "python manage.py collectstatic --noinput &&
+             gunicorn backtester.wsgi:application --bind 0.0.0.0:8000"
+
+volumes:
+  static_volume:
+  media_volume:

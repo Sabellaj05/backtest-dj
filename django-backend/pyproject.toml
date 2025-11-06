@@ -11,6 +11,8 @@ dependencies = [
     "django==5.0.4",
     "django-cors-headers>=4.9.0",
     "djangorestframework>=3.16.1",
+    "duckdb-engine>=0.17.0",
+    "gunicorn>=23.0.0",
     "numpy==1.23.5",
     "pandas==1.5.3",
     "plotly==5.22.0",
