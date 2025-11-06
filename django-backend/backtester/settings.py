@@ -75,8 +75,8 @@ WSGI_APPLICATION = 'backtester.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'duckdb_engine',
-        'NAME': BASE_DIR / 'db.duckdb',
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
 

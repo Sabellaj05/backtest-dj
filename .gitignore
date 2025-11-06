@@ -104,3 +104,5 @@ notebooks/
 # *.png
 # *.jpg
 # *.jpeg
+
+typings/
