@@ -23,16 +23,23 @@ import './App.css';
 
 // Auto-detect API base URL based on current hostname
 const getApiBaseUrl = () => {
-  const hostname = window.location.hostname;
-  const protocol = window.location.protocol;
-  
-  // If accessing via network IP, use that IP for backend
-  if (hostname.match(/^192\.168\.\d+\.\d+$/)) {
-    return `${protocol}//${hostname}:8000`;
+  // If VITE_API_BASE_URL is explicitly set, use it
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
   }
   
-  // Otherwise use localhost (or env variable if set)
-  return import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+  // In production (Docker/Nginx), use relative path to relay on Nginx proxy
+  if (import.meta.env.PROD) {
+    return '';
+  }
+  
+  // Fallback for local development (running frontend separately)
+  const hostname = window.location.hostname;
+  if (hostname.match(/^192\.168\.\d+\.\d+$/)) {
+     return `${window.location.protocol}//${hostname}:8000`;
+  }
+
+  return 'http://localhost:8000';
 };
 
 // Define strategy options
