@@ -131,6 +131,8 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^http://192\.168\.\d+\.\d+(:[0-9]+)?$",
 ]
 
+CSRF_TRUSTED_ORIGINS = os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', 'http://localhost http://127.0.0.1').split()
+
 
 # --- Django REST Framework ---
 
