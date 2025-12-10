@@ -1,82 +1,94 @@
-# Django Full-Stack Project
+# Backtester Project
 
-A full-stack application with Django backend and React frontend.
+A Django-based Backtester with a Vite/React Frontend.
 
-![Image](assets/main-ui.png)
+<p align="center">
+  <img src="assets/main-ui.png" alt="Main UI" width="800">
+</p>
 
-## Project Structure
+## 📊 Overview
 
-```
-django-project/
-├── django-backend/     # Django REST API
-├── django-front/       # React + Vite frontend
-└── assets/            # Shared assets
-```
-![Image](assets/backtest-results.png)
+Perform complex backtesting simulations with ease. Visualize results with interactive charts.
 
-## Getting Started
+<p align="center">
+  <img src="assets/backtest-results.png" alt="Backtest Results" width="800">
+</p>
 
-### Backend Setup
+## 🚀 Deployment Guide (VPS with Docker)
 
-```bash
-cd django-backend
+This project is containerized with Docker for easy deployment. It includes:
+-   **Backend**: Django (Gunicorn)
+-   **Frontend**: Vite (Nginx)
+-   **Database**: SQLite (Persisted via volume)
+-   **Proxy**: Internal Nginx to route `/` to frontend and `/api`, `/admin` to backend.
 
-# Create and activate virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-# with uv
-uv sync
-source .venv/bin/activate
+### Prerequisites
+-   Docker Engine installed.
+-   Docker Compose (v2) installed.
+-   (Optional) Nginx Proxy Manager installed on the host for SSL/Domain management.
 
-# Install dependencies
-pip install -r requirements.txt
+### Installation Steps
 
-# Run migrations
-python manage.py migrate
-uv run manage.py migrate
+1.  **Clone the Repository**:
+    ```bash
+    git clone <your-repo-url>
+    cd backtest-dj
+    ```
 
-# Start development server
-python manage.py runserver
-uv run manage.py runserver
-```
+2.  **Configure Environment**:
+    Create a `.env` file from the template:
+    ```bash
+    cp .env.example .env
+    ```
+    Open `.env` and **CHANGE** the following:
+    -   `DJANGO_SECRET_KEY`: Set to a long random secure string.
+    -   `DJANGO_ALLOWED_HOSTS`: Add your VPS IP / Domain.
+    -   `DJANGO_CSRF_TRUSTED_ORIGINS`: Add your full URL (e.g., `https://app.yoursite.com`).
 
-Backend runs at: `http://localhost:8000`
+    ```bash
+    nano .env
+    ```
 
-### Frontend Setup
+3.  **Start Services**:
+    Build and run the containers:
+    ```bash
+    docker compose up --build -d
+    ```
 
-```bash
-cd django-front
+4.  **Initial Setup (First Run Only)**:
+    You need to set up the database and create an admin user.
+    ```bash
+    # Run migrations
+    docker compose exec backend python manage.py migrate
 
-# Install dependencies
-npm install
+    # Create admin user (follow the interactive prompts)
+    docker compose exec -it backend python manage.py createsuperuser
+    ```
 
-# Start development server
-npm run dev
-# for local access
-# npm run dev -- --host 0.0.0.0
-```
+5.  **Access the Application**:
+    -   **Frontend**: `http://<your-vps-ip>` (or your domain via Proxy Manager)
+    -   **Admin Panel**: `http://<your-vps-ip>/admin/`
+    -   **API**: `http://<your-vps-ip>/api/v1/backtest/`
 
-Frontend runs at: `http://localhost:5173` (or another port if 5173 is busy)
+### 🔒 Nginx Proxy Manager (SSL) Configuration
 
-## Development Workflow
+If you are using Nginx Proxy Manager:
+1.  Ensure `docker-compose.yml` does not conflict on port 80. If needed, allow the project to bind to a different port (e.g., `8081:80`) in `docker-compose.yml`.
+2.  In Proxy Manager, add a Proxy Host:
+    -   **Domain**: `app.yoursite.com`
+    -   **Forward Host**: `host.docker.internal` (or your VPS private IP)
+    -   **Forward Port**: `80` (or `8081` if changed)
+    -   **SSL**: Enable "Force SSL" and "HSTS".
 
-1. Start both servers in separate terminals
-2. Frontend proxies API requests to backend
-3. Make changes and see them hot-reload
+### 🛠 Troubleshooting
 
-## Tech Stack
+-   **Updates**: To deploy code changes, run:
+    ```bash
+    git pull
+    docker compose up --build -d
+    ```
 
-**Backend:**
-- Django
-- Django REST Framework
-
-**Frontend:**
-- React
-- Vite
-- TailwindCSS
-
-## Notes
-
-- Environment files (`.env`, `.env.local`) are gitignored - never commit secrets!
-- Database file (`db.sqlite3`) is gitignored for local development
-- `node_modules` and `venv` are gitignored - always reinstall dependencies
+-   **Logs**: Check logs if something fails:
+    ```bash
+    docker compose logs -f
+    ```
