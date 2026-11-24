@@ -17,6 +17,7 @@ interface PriceSignalChartProps {
   meta: RunMeta;
   priceChart: PriceChartData;
   svgRef: RefObject<SVGSVGElement>;
+  isSample?: boolean;
 }
 
 interface RightLabelItem {
@@ -33,6 +34,7 @@ export function PriceSignalChart({
   meta,
   priceChart,
   svgRef,
+  isSample = false,
 }: PriceSignalChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(860);
@@ -279,6 +281,11 @@ export function PriceSignalChart({
               {meta.ticker} · {meta.strategy_name} · {meta.start_date} to{' '}
               {meta.end_date} ({meta.interval.toUpperCase()})
             </span>
+            {isSample && (
+              <span className="rounded-[4px] border border-[var(--line-2)] bg-[var(--surface)] px-1.5 py-0.5 text-[10.5px] font-medium text-[var(--fg-2)]">
+                Sample data
+              </span>
+            )}
           </div>
         </div>
 

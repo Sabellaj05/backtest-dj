@@ -33,8 +33,8 @@ export function Navbar({
 }: NavbarProps) {
   const statusMeta = {
     checking: { dot: 'bg-amber-400 animate-pulse', label: 'Checking' },
-    online: { dot: 'bg-[var(--pos)]', label: 'Online' },
-    offline: { dot: 'bg-[var(--neg)]', label: 'Offline' },
+    online: { dot: 'bg-[var(--pos)]', label: 'Live API' },
+    offline: { dot: 'bg-[var(--brand)]', label: 'Sample mode' },
   }[healthStatus];
 
   return (

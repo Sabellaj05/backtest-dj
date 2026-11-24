@@ -14,8 +14,15 @@ import { MethodologyModal } from '@/components/MethodologyModal';
 import { PriceSignalChart } from '@/components/PriceSignalChart';
 import { TradeHistoryTable } from '@/components/TradeHistoryTable';
 import { Skeleton } from '@/components/ui/skeleton';
-import { checkHealth, fetchStrategies, runBacktestApi } from '@/lib/api';
+import {
+  ApiHttpError,
+  checkHealth,
+  fetchStrategies,
+  isExplicitDemoMode,
+  runBacktestApi,
+} from '@/lib/api';
 import { exportSvgToPng } from '@/lib/exportSvg';
+import { generateSampleBacktest } from '@/lib/sampleBacktest';
 import {
   BacktestRequest,
   BacktestResponse,
@@ -75,7 +82,9 @@ export function App() {
   const [activeTab, setActiveTab] = useState<SectionTab>('price');
   const [strategies, setStrategies] =
     useState<StrategyInfo[]>(DEFAULT_STRATEGIES);
-  const [healthStatus, setHealthStatus] = useState<HealthStatus>('checking');
+  const [healthStatus, setHealthStatus] = useState<HealthStatus>(() =>
+    isExplicitDemoMode() ? 'offline' : 'checking'
+  );
   const [methodologyOpen, setMethodologyOpen] = useState(false);
 
   const [ticker, setTicker] = useState<string>('AAPL');
@@ -91,6 +100,7 @@ export function App() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<BacktestResponse | null>(null);
+  const [isSampleResult, setIsSampleResult] = useState<boolean>(false);
 
   const priceSvgRef = useRef<SVGSVGElement>(null);
   const equitySvgRef = useRef<SVGSVGElement>(null);
@@ -130,22 +140,42 @@ export function App() {
     };
   }, []);
 
-  const executeSimulation = useCallback(async (params: BacktestRequest) => {
-    setError(null);
-    setIsLoading(true);
-    try {
-      const data = await runBacktestApi(params);
-      setResults(data);
-      setActiveTab('price');
-      setHealthStatus('online');
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'An unknown error occurred.';
-      setError(message);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const executeSimulation = useCallback(
+    async (params: BacktestRequest) => {
+      setError(null);
+      setIsLoading(true);
+      try {
+        if (isExplicitDemoMode() || healthStatus !== 'online') {
+          await new Promise((resolve) => setTimeout(resolve, 150));
+          const sampleData = generateSampleBacktest(params);
+          setResults(sampleData);
+          setIsSampleResult(true);
+          setActiveTab('price');
+          return;
+        }
+
+        const data = await runBacktestApi(params);
+        setResults(data);
+        setIsSampleResult(false);
+        setActiveTab('price');
+        setHealthStatus('online');
+      } catch (err) {
+        if (err instanceof ApiHttpError) {
+          setError(err.message);
+        } else {
+          // Network or non-JSON failure (e.g., static deploy): fall back to sample data
+          const sampleData = generateSampleBacktest(params);
+          setResults(sampleData);
+          setIsSampleResult(true);
+          setActiveTab('price');
+          setHealthStatus('offline');
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [healthStatus]
+  );
 
   const handleSubmit = useCallback(() => {
     const cleanTicker = ticker.trim().toUpperCase();
@@ -272,6 +302,7 @@ export function App() {
                 meta={results.meta}
                 priceChart={results.price_chart}
                 svgRef={priceSvgRef}
+                isSample={isSampleResult}
               />
               <EquityPerformanceChart
                 meta={results.meta}
@@ -324,6 +355,7 @@ export function App() {
               if (error) setError(null);
             }}
             isLoading={isLoading}
+            isSampleMode={healthStatus !== 'online'}
             error={error}
             onReset={handleReset}
             onSubmit={handleSubmit}

@@ -1,5 +1,19 @@
 import { BacktestRequest, BacktestResponse, StrategyInfo } from '@/types/backtest';
 
+export class ApiHttpError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiHttpError';
+    this.status = status;
+  }
+}
+
+export function isExplicitDemoMode(): boolean {
+  return import.meta.env.VITE_DEMO_MODE === 'true';
+}
+
 export function getApiBaseUrl(): string {
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL;
@@ -18,6 +32,11 @@ export function getApiBaseUrl(): string {
   }
 
   return 'http://localhost:8000';
+}
+
+function isJsonResponse(response: Response): boolean {
+  const contentType = response.headers.get('content-type') || '';
+  return contentType.toLowerCase().includes('application/json');
 }
 
 function extractApiError(payload: unknown): string {
@@ -49,9 +68,10 @@ function extractApiError(payload: unknown): string {
 }
 
 export async function checkHealth(): Promise<boolean> {
+  if (isExplicitDemoMode()) return false;
   try {
     const response = await fetch(`${getApiBaseUrl()}/api/v1/healthcheck/`);
-    if (!response.ok) return false;
+    if (!response.ok || !isJsonResponse(response)) return false;
     const data = await response.json();
     return data?.status === 'ok';
   } catch {
@@ -60,8 +80,9 @@ export async function checkHealth(): Promise<boolean> {
 }
 
 export async function fetchStrategies(): Promise<StrategyInfo[]> {
+  if (isExplicitDemoMode()) return [];
   const response = await fetch(`${getApiBaseUrl()}/api/v1/strategies/`);
-  if (!response.ok) {
+  if (!response.ok || !isJsonResponse(response)) {
     throw new Error('Failed to load strategies.');
   }
   const data = await response.json();
@@ -79,9 +100,13 @@ export async function runBacktestApi(
     body: JSON.stringify(params),
   });
 
+  if (!isJsonResponse(response)) {
+    throw new Error('Backend API did not return JSON.');
+  }
+
   const data = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(extractApiError(data));
+    throw new ApiHttpError(extractApiError(data), response.status);
   }
 
   return data as BacktestResponse;

@@ -2,6 +2,7 @@ import { format } from 'date-fns';
 import {
   AlertCircle,
   CalendarIcon,
+  Info,
   Loader2,
   RotateCcw,
   Search,
@@ -51,6 +52,7 @@ interface ConfigPanelProps {
   interval: IntervalOption;
   onIntervalChange: (value: IntervalOption) => void;
   isLoading: boolean;
+  isSampleMode: boolean;
   error: string | null;
   onReset: () => void;
   onSubmit: () => void;
@@ -73,6 +75,7 @@ export function ConfigPanel({
   interval,
   onIntervalChange,
   isLoading,
+  isSampleMode,
   error,
   onReset,
   onSubmit,
@@ -400,24 +403,61 @@ export function ConfigPanel({
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="flex h-9 w-full items-center justify-center gap-2 rounded-[5px] text-[12.5px] font-medium transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-          style={{
-            backgroundColor: 'var(--brand)',
-            color: 'var(--on-accent)',
-          }}
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              <span>Running simulation...</span>
-            </>
-          ) : (
-            <span>Run backtest</span>
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="flex h-9 flex-1 items-center justify-center gap-2 rounded-[5px] text-[12.5px] font-medium transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            style={{
+              backgroundColor: 'var(--brand)',
+              color: 'var(--on-accent)',
+            }}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>Running simulation...</span>
+              </>
+            ) : (
+              <span>Run backtest</span>
+            )}
+          </button>
+
+          <div className="group relative flex-shrink-0">
+            <button
+              type="button"
+              aria-label="Data source and backend setup info"
+              className="flex h-9 w-9 items-center justify-center rounded-[5px] border border-[var(--line-2)] text-[var(--fg-2)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--fg)] focus:outline-none focus:border-[var(--brand)]"
+            >
+              <Info className="h-4 w-4" />
+            </button>
+
+            <div
+              role="tooltip"
+              className="invisible absolute bottom-full right-0 z-30 pb-2 opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+            >
+              <div className="w-[248px] rounded-[8px] border border-[var(--line-2)] bg-[var(--surface)] p-3 text-[11.5px] leading-relaxed text-[var(--fg-2)]">
+                <p className="font-medium text-[var(--fg)]">
+                  {isSampleMode ? 'Sample showcase mode' : 'Live Django backend'}
+                </p>
+                <p className="mt-1">
+                  {isSampleMode
+                    ? 'This static demo generates deterministic sample OHLCV data in your browser. To run live Yahoo Finance backtests through the Django backend, clone and run the repository from GitHub.'
+                    : 'Connected to the local Django REST API for live Yahoo Finance data. Static deployments automatically fall back to client-side sample data.'}
+                </p>
+                <a
+                  href="https://github.com/Sabellaj05/backtest-dj"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-block font-medium underline underline-offset-2"
+                  style={{ color: 'var(--brand)' }}
+                >
+                  github.com/Sabellaj05/backtest-dj
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
       </form>
     </div>
   );
