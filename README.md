@@ -1,4 +1,4 @@
-# QuantFlow — Equity Strategy Backtester
+# QuantFlow Equity Strategy Backtester Demo
 
 ![Main UI](assets/main-ui-v2.png)
 
