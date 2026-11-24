@@ -1,11 +1,8 @@
 # QuantFlow — Equity Strategy Backtester
 
+![Main UI](assets/main-ui-v2.png)
+
 A full-stack quantitative backtesting application combining a stateless Django REST API (`yfinance` + `backtesting.py`) with a React/TypeScript frontend featuring custom `<svg>` financial visualizations.
-
-## Live Showcase vs Local Backend
-
-- **Static Frontend Showcase (Cloudflare Pages)**: When deployed without a Python backend (or built with `VITE_DEMO_MODE=true`), the UI automatically switches to **Sample mode** and runs a deterministic client-side simulation engine with realistic OHLCV series, SMA overlays, risk rules, and trade logs.
-- **Full-Stack Live Mode (Local / Docker)**: When running the Django backend locally alongside the frontend, the app detects the API automatically (`Live API`) and fetches real historical market data from Yahoo Finance (`yfinance`).
 
 ## Quick Start (Run Locally with Live Django Backend)
 
@@ -52,19 +49,6 @@ docker compose up --build
 
 Open `http://localhost` (Nginx serves the built frontend and proxies `/api/` to Gunicorn on port 8000; no database or migrations are required).
 
-## Deploy Frontend Showcase to Cloudflare Pages
-
-The frontend builds cleanly as a static showcase without a backend:
-
-1. Connect `https://github.com/Sabellaj05/backtest-dj` in **Cloudflare Pages**.
-2. Configure build settings:
-   - **Root directory**: `django-front`
-   - **Build command**: `npm run build`
-   - **Build output directory**: `dist`
-3. Add environment variables:
-   - `NODE_VERSION` = `22` (also pinned in `django-front/.node-version`)
-   - `VITE_DEMO_MODE` = `true` (skips API healthcheck probes and runs in instant `Sample mode`)
-
 ## Implemented Strategies
 
 - **SMA Crossover (10/50)** (`sma_cross`): Trend-following crossover entering long when SMA(10) crosses above SMA(50) and reversing short on downward crossover.
@@ -76,3 +60,17 @@ The frontend builds cleanly as a static showcase without a backend:
 - `GET /api/v1/healthcheck/` — Readiness check (`{"status": "ok"}`).
 - `GET /api/v1/strategies/` — Strategy catalog metadata.
 - `POST /api/v1/backtest/` — Executes a stateless backtest (`ticker`, `startDate`, `endDate`, `strategy`, `capital`, `interval`) and returns `meta`, `metrics`, `price_chart`, `equity_chart`, and `trades`.
+
+## Charts
+
+### Price & Signals
+
+![Price](assets/line-chart.png)
+
+### Equity & Drawdown
+
+![Equity](assets/equity.png)
+
+### Executions
+
+![Equity](assets/exec.png)
