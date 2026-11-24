@@ -9,11 +9,8 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  optimizeDeps: {
-    exclude: ['lucide-react'],
-  },
   server: {
-    host: '0.0.0.0', // Listen on all network interfaces
+    host: '0.0.0.0',
     port: 3001,
   },
 });

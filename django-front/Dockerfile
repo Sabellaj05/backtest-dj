@@ -1,6 +1,5 @@
-
 # Use an official Node.js runtime as a parent image
-FROM node:18-alpine as build
+FROM node:22-alpine AS build
 
 # Set the working directory in the container
 WORKDIR /app
@@ -8,8 +7,8 @@ WORKDIR /app
 # Copy package.json and package-lock.json to the working directory
 COPY package*.json ./
 
-# Install any needed packages
-RUN npm install
+# Install dependencies
+RUN npm ci
 
 # Copy the rest of the frontend application's code
 COPY . .
@@ -18,7 +17,7 @@ COPY . .
 RUN npm run build
 
 # Final image
-FROM nginx:1.21-alpine
+FROM nginx:1.27-alpine
 
 # Copy the built application from the build stage
 COPY --from=build /app/dist /usr/share/nginx/html
